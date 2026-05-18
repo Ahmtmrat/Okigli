@@ -1,0 +1,95 @@
+/* ===== Design tokens ===== */
+:root {
+  --ink:        #0f1e3a;
+  --blue:       #2964c3;
+  --blue-soft:  #4a82d4;
+  --light-blue: #dde7f8;
+  --cream:      #fefbf6;
+  --cream-2:    #f5efe4;
+  --paper:      #ffffff;
+  --muted:      #6c7a93;
+  --line:       #e8e0d0;
+  --error:      #b34036;
+  --success:    #2d7a4f;
+
+  --display: 'Cormorant Garamond', 'Times New Roman', serif;
+  --body:    'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono:    ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --radius-sm: 8px;
+  --radius:    14px;
+  --radius-lg: 24px;
+
+  --shadow-sm: 0 1px 2px rgba(15, 30, 58, 0.04);
+  --shadow:    0 8px 32px -8px rgba(15, 30, 58, 0.12);
+  --shadow-lg: 0 24px 64px -16px rgba(15, 30, 58, 0.20);
+}
+
+/* ===== Reset ===== */
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--cream);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+}
+
+/* Dekoratif arkaplan - kağıt dokusu hissi */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, var(--light-blue) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 50% 110%, var(--cream-2) 0%, transparent 60%);
+  opacity: 0.55;
+}
+
+input, button, textarea, select { font: inherit; color: inherit; }
+button { background: none; border: none; cursor: pointer; }
+a { color: inherit; }
+
+img { display: block; max-width: 100%; height: auto; }
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===== Type scale ===== */
+.serif { font-family: var(--display); font-weight: 400; }
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--blue);
+  font-weight: 500;
+}
+
+/* ===== Utility ===== */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden;
+  clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* ===== Animations ===== */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade {
+  from { opacity: 0; } to { opacity: 1; }
+}
+.fade-up { animation: fadeUp 0.7s cubic-bezier(.2,.8,.2,1) both; }
+.fade    { animation: fade    0.4s ease both; }
