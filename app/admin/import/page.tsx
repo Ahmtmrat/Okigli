@@ -1,9 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 export default function ImportPage() {
+  return (
+    <Suspense fallback={<main style={{ padding: 40, color: 'var(--muted)' }}>Yükleniyor…</main>}>
+      <ImportContent />
+    </Suspense>
+  );
+}
+
+function ImportContent() {
   const params = useSearchParams();
   const key = params.get('key') ?? '';
   const [csv, setCsv] = useState('');

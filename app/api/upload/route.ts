@@ -6,6 +6,10 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const MAX_BYTES = 50 * 1024 * 1024;
+const ALLOWED_TYPES = new Set([
+  'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
+  'image/heic', 'image/heif', 'image/gif',
+]);
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,6 +19,9 @@ export async function POST(req: NextRequest) {
     const message = ((form.get('message') as string | null) ?? '').trim();
 
     if (!file || !token) return NextResponse.json({ error: 'Eksik veri' }, { status: 400 });
+    if (!ALLOWED_TYPES.has(file.type)) {
+      return NextResponse.json({ error: 'Sadece görsel dosyası yükleyebilirsiniz' }, { status: 415 });
+    }
     if (file.size > MAX_BYTES) return NextResponse.json({ error: 'Dosya çok büyük' }, { status: 413 });
 
     // Davetli var mı?
@@ -45,9 +52,9 @@ export async function POST(req: NextRequest) {
     `;
 
     return NextResponse.json({ ok: true, id: result.id, url: result.webViewLink });
-  } catch (e: any) {
+  } catch (e) {
     console.error('upload error', e);
-    return NextResponse.json({ error: e?.message ?? 'Sunucu hatası' }, { status: 500 });
+    return NextResponse.json({ error: 'Sunucu hatası' }, { status: 500 });
   }
 }
 

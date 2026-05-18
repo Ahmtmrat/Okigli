@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 type Memory = {
@@ -16,6 +16,14 @@ type Memory = {
 };
 
 export default function GalleryPage() {
+  return (
+    <Suspense fallback={<main style={{ padding: 40, color: 'var(--muted)' }}>Yükleniyor…</main>}>
+      <GalleryContent />
+    </Suspense>
+  );
+}
+
+function GalleryContent() {
   const params = useSearchParams();
   const key = params.get('key') ?? '';
   const [items, setItems] = useState<Memory[]>([]);

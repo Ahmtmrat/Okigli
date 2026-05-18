@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 type Invitee = {
@@ -14,6 +14,14 @@ type Invitee = {
 };
 
 export default function AdminPage() {
+  return (
+    <Suspense fallback={<main style={{ padding: 40, color: 'var(--muted)' }}>Yükleniyor…</main>}>
+      <AdminContent />
+    </Suspense>
+  );
+}
+
+function AdminContent() {
   const params = useSearchParams();
   const key = params.get('key') ?? '';
   const [data, setData] = useState<Invitee[]>([]);
