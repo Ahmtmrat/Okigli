@@ -1,12 +1,16 @@
 import { neon } from '@neondatabase/serverless';
 
-const _sql = neon(process.env.POSTGRES_URL!);
+let _sql: ReturnType<typeof neon> | null = null;
+function getSql() {
+  if (!_sql) _sql = neon(process.env.POSTGRES_URL!);
+  return _sql;
+}
 
 export const sql = <T = Record<string, unknown>>(
   strings: TemplateStringsArray,
   ...values: unknown[]
 ): Promise<{ rows: T[] }> =>
-  (_sql(strings, ...values) as Promise<unknown[]>).then(rows => ({ rows: rows as T[] }));
+  (getSql()(strings, ...values) as Promise<unknown[]>).then(rows => ({ rows: rows as T[] }));
 
 export type InviteeRow = {
   token: string;
