@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@vercel/postgres';
+import { sql } from '@/lib/db';
 import { ensureGuestFolder, uploadToDrive } from '@/lib/drive';
 
 export const runtime = 'nodejs';

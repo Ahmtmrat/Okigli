@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@vercel/postgres';
+import { sql } from '@/lib/db';
 import Papa from 'papaparse';
 import { isAdmin } from '@/lib/auth';
 import { generateToken } from '@/lib/token';

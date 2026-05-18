@@ -1,6 +1,12 @@
-import { sql } from '@vercel/postgres';
+import { neon } from '@neondatabase/serverless';
 
-export { sql };
+const _sql = neon(process.env.POSTGRES_URL!);
+
+export const sql = <T = Record<string, unknown>>(
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+): Promise<{ rows: T[] }> =>
+  (_sql(strings, ...values) as Promise<unknown[]>).then(rows => ({ rows: rows as T[] }));
 
 export type InviteeRow = {
   token: string;
