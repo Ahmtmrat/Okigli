@@ -1,12 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import IntroAnimation from './intro-animation';
+import { GuestModal } from '@/components/GuestModal';
 
 type PickedFile = {
   id: string;
   file: File;
   url: string;
+};
+
+type Invitee = {
+  token: string;
+  salutation: string;
+  fullName: string;
+  status: 'accepted' | 'declined' | null;
 };
 
 function formatSize(bytes: number) {
@@ -20,45 +29,140 @@ function isImage(file: File) {
   return /\.(jpe?g|png|heic|heif|webp|gif)$/i.test(file.name);
 }
 
-function InvitationSectionCard({ onRsvp }: { onRsvp: (message: string) => void }) {
-  const [choice, setChoice] = useState<'yes' | 'no' | null>(null);
+function InvitationSectionCard({
+  invitee,
+  onRsvp,
+  onRsvpDone,
+}: {
+  invitee: Invitee | null;
+  onRsvp: (message: string) => void;
+  onRsvpDone: (status: 'accepted' | 'declined') => void;
+}) {
+  const [localStatus, setLocalStatus] = useState<'accepted' | 'declined' | null>(
+    invitee?.status ?? null
+  );
+  const [pending, setPending] = useState<'accepted' | 'declined' | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
-  const choose = (next: 'yes' | 'no') => {
-    const value = choice === next ? null : next;
-    setChoice(value);
-    onRsvp(
-      value
-        ? 'Katılım bildirimi için davetinizdeki kişisel bağlantınızı kullanın.'
-        : 'Seçim temizlendi.'
-    );
+  useEffect(() => {
+    setLocalStatus(invitee?.status ?? null);
+  }, [invitee?.status]);
+
+  const submitRsvp = async (status: 'accepted' | 'declined', guests: string[] = []) => {
+    const res = await fetch('/api/rsvp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: invitee!.token, status, guests }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ?? 'Bir hata oluştu');
+    }
   };
+
+  const handleNo = async () => {
+    if (!invitee || pending) return;
+    setPending('declined');
+    try {
+      await submitRsvp('declined');
+      setLocalStatus('declined');
+      onRsvpDone('declined');
+      onRsvp('Yanıtınız alındı, teşekkür ederiz.');
+    } catch (e: any) {
+      onRsvp(e?.message ?? 'Bir hata oluştu');
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const handleModalSubmit = async (guests: string[]) => {
+    await submitRsvp('accepted', guests);
+    setLocalStatus('accepted');
+    onRsvpDone('accepted');
+    onRsvp('Yanıtınız alındı, sizi bekliyoruz!');
+  };
+
+  const responded = localStatus !== null;
 
   return (
     <div className="invite-card-stage">
       <div className="invite-card">
         <section className="invite-card-top">
+          {invitee && (
+            <p className="invite-greeting">Merhaba {invitee.salutation},</p>
+          )}
+
           <h1 className="invite-names">
             <span>D</span>iba <span className="amp">&amp;</span> <span>K</span>adir
           </h1>
 
           <div className="invite-rsvp-wrap">
-            <div className="invite-rsvp" role="group" aria-label="Katılım durumu" data-chosen={choice ?? undefined}>
-              <button className="invite-btn" type="button" aria-pressed={choice === 'yes'} onClick={() => choose('yes')}>
-                <svg className="mark" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
-                  <path d="M2 7.5 L6 11 L12 3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Katılacağım
-              </button>
-              <button className="invite-btn" type="button" aria-pressed={choice === 'no'} onClick={() => choose('no')}>
-                <svg className="mark" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
-                  <path d="M3 3 L11 11 M11 3 L3 11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-                Katılmayacağım
-              </button>
-            </div>
-            <div className="rsvp-thanks">
-              {choice === 'yes' ? 'Sizi aramızda görmek bizi çok mutlu edecek' : 'Yanıtınız için teşekkür ederiz'}
-            </div>
+            {!responded && invitee && (
+              <div className="invite-rsvp" role="group" aria-label="Katılım durumu">
+                <button
+                  className="invite-btn"
+                  type="button"
+                  aria-pressed={false}
+                  disabled={!!pending}
+                  onClick={() => { if (!pending) setModalOpen(true); }}
+                >
+                  <svg className="mark" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
+                    <path d="M2 7.5 L6 11 L12 3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {pending === 'accepted' ? 'Gönderiliyor…' : 'Katılacağım'}
+                </button>
+                <button
+                  className="invite-btn"
+                  type="button"
+                  aria-pressed={false}
+                  disabled={!!pending}
+                  onClick={handleNo}
+                >
+                  <svg className="mark" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
+                    <path d="M3 3 L11 11 M11 3 L3 11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  {pending === 'declined' ? 'Gönderiliyor…' : 'Katılmayacağım'}
+                </button>
+              </div>
+            )}
+
+            {!responded && !invitee && (
+              <div className="invite-rsvp" role="group" aria-label="Katılım durumu" data-chosen={undefined}>
+                <button className="invite-btn" type="button" aria-pressed={false} onClick={() => onRsvp('Katılım bildirimi için kişisel davet bağlantınızı kullanın.')}>
+                  <svg className="mark" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
+                    <path d="M2 7.5 L6 11 L12 3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Katılacağım
+                </button>
+                <button className="invite-btn" type="button" aria-pressed={false} onClick={() => onRsvp('Katılım bildirimi için kişisel davet bağlantınızı kullanın.')}>
+                  <svg className="mark" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
+                    <path d="M3 3 L11 11 M11 3 L3 11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  Katılmayacağım
+                </button>
+              </div>
+            )}
+
+            {responded && (
+              <div className="invite-responded">
+                {localStatus === 'accepted' ? (
+                  <>
+                    <div className="responded-icon">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 12l5 5L20 7" />
+                      </svg>
+                    </div>
+                    <p className="responded-text">Sizi aramızda görmek bizi çok mutlu edecek.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="responded-text responded-declined">
+                      Anlayışla karşılıyoruz, yanıtınız için teşekkür ederiz.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </section>
 
@@ -78,25 +182,48 @@ function InvitationSectionCard({ onRsvp }: { onRsvp: (message: string) => void }
           </div>
         </section>
       </div>
+
+      {invitee && (
+        <GuestModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onSubmit={handleModalSubmit}
+          salutation={invitee.salutation}
+        />
+      )}
     </div>
   );
 }
 
-export default function HomePage() {
+function HomeContent() {
+  const searchParams = useSearchParams();
+  const tokenParam = searchParams.get('token')?.trim() ?? '';
+
   const [animDone, setAnimDone] = useState(false);
+  const [scrollUnlocked, setScrollUnlocked] = useState(false);
+  const [invitee, setInvitee] = useState<Invitee | null>(null);
+  const [rsvpDone, setRsvpDone] = useState(false);
   const [files, setFiles] = useState<PickedFile[]>([]);
   const [dragging, setDragging] = useState(false);
   const [toast, setToast] = useState('');
+  const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   const dragDepth = useRef(0);
   const filesRef = useRef<PickedFile[]>([]);
 
-  // Scroll lock: animasyon bitene kadar aşağı kaydırmayı engelle
   useEffect(() => {
-    document.body.style.overflow = animDone ? '' : 'hidden';
+    document.body.style.overflow = (animDone || scrollUnlocked) ? '' : 'hidden';
     return () => { document.body.style.overflow = ''; };
-  }, [animDone]);
+  }, [animDone, scrollUnlocked]);
+
+  useEffect(() => {
+    if (!tokenParam || tokenParam.length < 6) return;
+    fetch(`/api/invitee?token=${encodeURIComponent(tokenParam)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.token) setInvitee(data); })
+      .catch(() => {});
+  }, [tokenParam]);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -106,24 +233,19 @@ export default function HomePage() {
 
   const addFiles = useCallback((list: FileList | null) => {
     if (!list) return;
-
     const incoming = Array.from(list);
     const accepted = incoming.filter(isImage);
     const rejected = incoming.length - accepted.length;
-
     if (accepted.length === 0) {
       if (rejected > 0) showToast('Sadece görsel dosyaları kabul edilir.');
       return;
     }
-
     const next = accepted.map(file => ({
       id: `${Date.now()}-${crypto.randomUUID()}`,
       file,
       url: URL.createObjectURL(file),
     }));
-
     setFiles(prev => [...prev, ...next]);
-    showToast(`${accepted.length} fotoğraf seçildi. Yüklemek için kişisel bağlantınızı kullanın.`);
     if (rejected > 0) {
       setTimeout(() => showToast(`${rejected} dosya desteklenmiyor.`), 2700);
     }
@@ -145,10 +267,28 @@ export default function HomePage() {
     showToast('Galeri temizlendi.');
   };
 
-  useEffect(() => {
-    filesRef.current = files;
-  }, [files]);
+  const uploadFiles = async () => {
+    if (!invitee || uploading || files.length === 0) return;
+    setUploading(true);
+    let successCount = 0;
+    for (const item of files) {
+      try {
+        const fd = new FormData();
+        fd.append('file', item.file);
+        fd.append('token', invitee.token);
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        if (res.ok) successCount++;
+      } catch {}
+    }
+    setFiles(prev => { prev.forEach(i => URL.revokeObjectURL(i.url)); return []; });
+    setUploading(false);
+    showToast(successCount > 0
+      ? `${successCount} fotoğraf yüklendi, teşekkürler!`
+      : 'Yükleme başarısız oldu, tekrar deneyin.'
+    );
+  };
 
+  useEffect(() => { filesRef.current = files; }, [files]);
   useEffect(() => {
     return () => {
       clearTimeout(toastTimer.current);
@@ -160,7 +300,7 @@ export default function HomePage() {
     <>
       <main className="home-shell">
         <section className="hero" aria-label="Diba ve Kadir düğün davetiyesi">
-          <IntroAnimation embedded showSkip={false} onComplete={() => setAnimDone(true)} />
+          <IntroAnimation embedded showSkip={false} onComplete={() => setAnimDone(true)} onScrollUnlock={() => setScrollUnlocked(true)} />
           {animDone && (
             <a className="scroll-cue" href="#invitation" aria-label="Davetiyeye git">
               <span>Davetiye</span>
@@ -170,7 +310,11 @@ export default function HomePage() {
 
         <section className="invite-section" id="invitation">
           <div className="invite-frame">
-            <InvitationSectionCard onRsvp={showToast} />
+            <InvitationSectionCard
+              invitee={invitee}
+              onRsvp={showToast}
+              onRsvpDone={(status) => setRsvpDone(true)}
+            />
           </div>
         </section>
 
@@ -246,8 +390,29 @@ export default function HomePage() {
                     <div className="gallery-title">
                       Yüklenenler <span className="count">{files.length} fotoğraf</span>
                     </div>
-                    <button className="gallery-clear" type="button" onClick={clearFiles}>Tümünü Temizle</button>
+                    <div className="gallery-actions">
+                      {invitee && (
+                        <button
+                          className="gallery-upload-btn"
+                          type="button"
+                          onClick={uploadFiles}
+                          disabled={uploading}
+                        >
+                          {uploading ? 'Yükleniyor…' : `${files.length} Fotoğraf Yükle`}
+                        </button>
+                      )}
+                      <button className="gallery-clear" type="button" onClick={clearFiles} disabled={uploading}>
+                        Tümünü Temizle
+                      </button>
+                    </div>
                   </header>
+
+                  {!invitee && (
+                    <p className="upload-notice">
+                      Fotoğraf yüklemek için kişisel davet bağlantınızı kullanın.
+                    </p>
+                  )}
+
                   <div className="grid">
                     {files.map((item, index) => (
                       <div className="memory-card" key={item.id} style={{ animationDelay: `${index * 40}ms` }}>
@@ -256,7 +421,7 @@ export default function HomePage() {
                           <div className="card-name">{item.file.name}</div>
                           <div className="card-size">{formatSize(item.file.size)}</div>
                         </div>
-                        <button className="card-remove" type="button" aria-label="Kaldır" onClick={() => removeFile(item.id)}>
+                        <button className="card-remove" type="button" aria-label="Kaldır" disabled={uploading} onClick={() => removeFile(item.id)}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M6 6l12 12M18 6L6 18" />
                           </svg>
@@ -405,7 +570,16 @@ export default function HomePage() {
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 34px;
+          gap: 24px;
+        }
+
+        .invite-greeting {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: clamp(14px, 1.8vw, 22px);
+          font-style: italic;
+          color: var(--home-ink-mute);
+          letter-spacing: 0.05em;
+          margin: 0;
         }
 
         .invite-names {
@@ -450,13 +624,18 @@ export default function HomePage() {
           user-select: none;
         }
 
-        .invite-btn:hover {
+        .invite-btn:hover:not(:disabled) {
           background: #b9c6e8;
           transform: translateY(-1px);
         }
 
-        .invite-btn:active {
+        .invite-btn:active:not(:disabled) {
           transform: translateY(0);
+        }
+
+        .invite-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
         .invite-btn[aria-pressed="true"] {
@@ -479,23 +658,40 @@ export default function HomePage() {
           margin-right: 10px;
         }
 
-        .rsvp-thanks {
-          position: absolute;
-          left: 50%;
-          transform: translateX(-50%);
-          bottom: -34px;
-          font-size: 14px;
-          letter-spacing: 0.28em;
-          color: var(--home-accent);
-          text-transform: uppercase;
-          opacity: 0;
-          transition: opacity 0.35s ease;
-          pointer-events: none;
-          white-space: nowrap;
+        .invite-responded {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 14px;
+          text-align: center;
         }
 
-        .invite-rsvp[data-chosen] + .rsvp-thanks {
-          opacity: 1;
+        .responded-icon {
+          width: 64px;
+          height: 64px;
+          border-radius: 50%;
+          background: rgba(90, 120, 196, 0.12);
+          color: var(--home-accent);
+          display: grid;
+          place-items: center;
+          animation: sealIn 0.5s cubic-bezier(.2,.8,.2,1);
+        }
+
+        @keyframes sealIn {
+          from { opacity: 0; transform: scale(0.6) rotate(-8deg); }
+          to   { opacity: 1; transform: scale(1) rotate(0); }
+        }
+
+        .responded-text {
+          font-family: 'Forum', serif;
+          font-size: clamp(14px, 1.8vw, 20px);
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          color: var(--home-accent);
+        }
+
+        .responded-declined {
+          color: var(--home-ink-mute);
         }
 
         .invite-card-bottom {
@@ -705,6 +901,33 @@ export default function HomePage() {
           margin-left: 12px;
         }
 
+        .gallery-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .gallery-upload-btn {
+          background: var(--home-accent);
+          color: white;
+          font-size: 12px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          padding: 8px 18px;
+          border-radius: 2px;
+          cursor: pointer;
+          transition: background 200ms ease, opacity 200ms ease;
+        }
+
+        .gallery-upload-btn:hover:not(:disabled) {
+          background: #4a68b4;
+        }
+
+        .gallery-upload-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
         .gallery-clear {
           color: var(--home-ink-mute);
           font-size: 11px;
@@ -715,8 +938,22 @@ export default function HomePage() {
           transition: color 200ms ease;
         }
 
-        .gallery-clear:hover {
+        .gallery-clear:hover:not(:disabled) {
           color: #b85a4a;
+        }
+
+        .gallery-clear:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+
+        .upload-notice {
+          font-size: 13px;
+          color: var(--home-ink-mute);
+          letter-spacing: 0.06em;
+          text-align: center;
+          margin-bottom: 20px;
+          font-style: italic;
         }
 
         .grid {
@@ -806,8 +1043,12 @@ export default function HomePage() {
           opacity: 1;
         }
 
-        .card-remove:hover {
+        .card-remove:hover:not(:disabled) {
           background: #b85a4a;
+        }
+
+        .card-remove:disabled {
+          cursor: not-allowed;
         }
 
         .card-remove svg {
@@ -897,7 +1138,7 @@ export default function HomePage() {
           }
 
           .invite-card-top {
-            gap: 22px;
+            gap: 16px;
           }
 
           .invite-names {
@@ -919,11 +1160,6 @@ export default function HomePage() {
             letter-spacing: 0.18em;
             width: 100%;
             max-width: 320px;
-          }
-
-          .rsvp-thanks {
-            font-size: 11px;
-            bottom: -28px;
           }
 
           .invite-card-bottom {
@@ -982,6 +1218,12 @@ export default function HomePage() {
             letter-spacing: 0.22em;
           }
 
+          .gallery-head {
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+          }
+
           .grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px;
@@ -1003,14 +1245,16 @@ export default function HomePage() {
           .site-footer-inner span {
             flex: initial;
           }
-
-          .gallery-head {
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-          }
         }
       `}</style>
     </>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={null}>
+      <HomeContent />
+    </Suspense>
   );
 }

@@ -15,6 +15,7 @@ const easeOutBack = (t: number) => {
 // Stage dimensions (portrait)
 const SW = 1080, SH = 1920;
 const COMPLETE_AT = 9.5;
+const SCROLL_UNLOCK_AT = COMPLETE_AT - 1;
 
 // Dusty Blue palette (from Davetiye.html)
 const C = {
@@ -238,7 +239,11 @@ function EnvelopeScene({ t }: { t: number }) {
 // Dimensions from scenes.jsx — settles at stage vertical center (y=960)
 const CARD_W = 352, CARD_H = 496;
 
-function InvitationCard({ t }: { t: number }) {
+function InvitationCard({ t, stageScale }: { t: number; stageScale: number }) {
+  const cardMul = stageScale < 0.6 ? 2.125 : 1.0;
+  const cw = CARD_W * cardMul;
+  const ch = CARD_H * cardMul;
+
   const slideT   = clamp((t - 3.55) / 1.20, 0, 1);
   const contentT = clamp((t - 4.40) / 3.00, 0, 1);
   const y        = 1200 + (960 - 1200) * easeOutCubic(slideT);
@@ -250,8 +255,8 @@ function InvitationCard({ t }: { t: number }) {
     <div style={{
       position: 'absolute',
       left: '50%', top: y,
-      width: CARD_W, height: CARD_H,
-      marginLeft: -CARD_W / 2, marginTop: -CARD_H / 2,
+      width: cw, height: ch,
+      marginLeft: -cw / 2, marginTop: -ch / 2,
       transform: `scale(${scale})`, opacity,
       borderRadius: 4,
       boxShadow: '0 40px 90px rgba(30,15,5,0.45), 0 12px 24px rgba(30,15,5,0.22), inset 0 0 0 1px rgba(120,90,50,0.12)',
@@ -272,6 +277,7 @@ function InvitationCard({ t }: { t: number }) {
 // ── IntroAnimation ────────────────────────────────────────────────────────────
 type IntroAnimationProps = {
   onComplete?: () => void;
+  onScrollUnlock?: () => void;
   embedded?: boolean;
   loop?: boolean;
   showSkip?: boolean;
@@ -279,15 +285,17 @@ type IntroAnimationProps = {
 
 export default function IntroAnimation({
   onComplete,
+  onScrollUnlock,
   embedded = false,
   loop = false,
   showSkip = true,
 }: IntroAnimationProps) {
-  const timeRef      = useRef(0);
-  const lastTsRef    = useRef<number | null>(null);
-  const rafRef       = useRef<number>();
-  const wrapRef      = useRef<HTMLDivElement>(null);
-  const completedRef = useRef(false);
+  const timeRef         = useRef(0);
+  const lastTsRef       = useRef<number | null>(null);
+  const rafRef          = useRef<number>();
+  const wrapRef         = useRef<HTMLDivElement>(null);
+  const completedRef    = useRef(false);
+  const scrollUnlockRef = useRef(false);
 
   const [t, setT]         = useState(0);
   const [fading, setFading] = useState(false);
@@ -310,6 +318,10 @@ export default function IntroAnimation({
 
   // Auto-complete or loop
   useEffect(() => {
+    if (t >= SCROLL_UNLOCK_AT && !scrollUnlockRef.current) {
+      scrollUnlockRef.current = true;
+      onScrollUnlock?.();
+    }
     if (t < COMPLETE_AT || completedRef.current) return;
     if (loop) {
       timeRef.current = 0;
@@ -375,7 +387,7 @@ export default function IntroAnimation({
       }}>
         <Backdrop t={t} />
         <GoldDust t={t} particles={particles} />
-        {t >= 3.45 && <InvitationCard t={t} />}
+        {t >= 3.45 && <InvitationCard t={t} stageScale={scale} />}
         {t >= 0.0  && <EnvelopeScene t={t} />}
         {/* Vignette */}
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.22) 115%)', pointerEvents: 'none', zIndex: 10 }} />
